@@ -10,6 +10,7 @@ import (
 )
 
 var server_log_file *os.File
+var udid = os.Getenv("DEVICE_UDID")
 
 func setLogging() {
 	log.SetFormatter(&log.JSONFormatter{})
@@ -23,8 +24,9 @@ func setLogging() {
 func handleRequests() {
 	// Create a new instance of the mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/installed-apps", ios_server.getInstalledApps)
 
-	log.Fatal(http.ListenAndServe(":10000", myRouter))
+	log.Fatal(http.ListenAndServe(":10001", myRouter))
 }
 
 func setupIOSDevice() {

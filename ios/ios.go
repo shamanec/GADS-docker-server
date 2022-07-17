@@ -9,8 +9,10 @@ import (
 	"github.com/danielpaulus/go-ios/ios"
 	"github.com/danielpaulus/go-ios/ios/imagemounter"
 	"github.com/danielpaulus/go-ios/ios/installationproxy"
+	"github.com/danielpaulus/go-ios/ios/instruments"
 	"github.com/danielpaulus/go-ios/ios/testmanagerd"
 	"github.com/danielpaulus/go-ios/ios/zipconduit"
+	"github.com/shamanec/GADS-docker-server/helpers"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -194,6 +196,79 @@ func uninstallAppInternal(bundle_id string) error {
 	return nil
 }
 
-type InstalledApps struct {
-	InstalledApps []string `json:"installed_apps"`
+type goIOSAppList []struct {
+	BundleID string `json:"CFBundleIdentifier"`
+}
+
+func GetInstalledApps() ([]string, error) {
+	device, err := ios.GetDevice(udid)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_device_apps",
+		}).Error("Could not get device with UDID: '" + udid + "'. Error: " + err.Error())
+		return nil, errors.New("Could not get device with UDID: '" + udid + "'. Error: " + err.Error())
+	}
+
+	svc, err := installationproxy.New(device)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_device_apps",
+		}).Error("Could not create installation proxy for device with UDID: '" + udid + "'. Error: " + err.Error())
+		return nil, errors.New("Could not create installation proxy for device with UDID: '" + udid + "'. Error: " + err.Error())
+	}
+
+	user_apps, err := svc.BrowseUserApps()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_device_apps",
+		}).Error("Could not get user apps for device with UDID: '" + udid + "'. Error: " + err.Error())
+		return nil, errors.New("Could not get user apps for device with UDID: '" + udid + "'. Error: " + err.Error())
+	}
+
+	var data goIOSAppList
+
+	err = helpers.UnmarshalJSONString(helpers.ConvertToJSONString(user_apps), &data)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "device_container_create",
+		}).Error("Could not unmarshal request body when uninstalling iOS app")
+		return nil, errors.New("Could not unmarshal user apps json")
+	}
+
+	var bundleIDs []string
+
+	for _, dataObject := range data {
+		bundleIDs = append(bundleIDs, dataObject.BundleID)
+	}
+
+	return bundleIDs, nil
+}
+
+func LaunchApp(bundleID string) (uint64, error) {
+
+	device, err := ios.GetDevice(udid)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_launch_app",
+		}).Error("Could not get device with UDID: '" + udid + "'. Error: " + err.Error())
+		return 0, errors.New("Could not get device with UDID: '" + udid + "'. Error: " + err.Error())
+	}
+
+	pControl, err := instruments.NewProcessControl(device)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_launch_app",
+		}).Error("Could not create process control for device with UDID: " + udid + ". Error: " + err.Error())
+		return 0, errors.New("Could not create process control for device with UDID: '" + udid + "'. Error: " + err.Error())
+	}
+
+	pid, err := pControl.LaunchApp(bundleID)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_launch_app",
+		}).Error("Could not launch app for device with UDID: " + udid + ". Error: " + err.Error())
+		return 0, errors.New("Could not launch app for device with UDID: '" + udid + "'. Error: " + err.Error())
+	}
+
+	return pid, nil
 }

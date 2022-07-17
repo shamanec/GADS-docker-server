@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"os"
 
-	ios_server "github.com/shamanec/GADS-docker-server/ios"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gorilla/mux"
@@ -14,6 +13,7 @@ var server_log_file *os.File
 
 //var udid = os.Getenv("DEVICE_UDID")
 var udid = "00008030000418C136FB802E"
+var DeviceOS = "android"
 
 func setLogging() {
 	log.SetFormatter(&log.JSONFormatter{})
@@ -25,31 +25,16 @@ func setLogging() {
 }
 
 func handleRequests() {
+	os.Setenv("DEVICE_OS", DeviceOS)
 	// Create a new instance of the mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/installed-apps", GetInstalledApps)
-	ios_server.InstallWDA()
-	ios_server.MountDiskImages()
-	ios_server.StartWDA()
-	ios_server.StartAppiumIOS()
+	myRouter.HandleFunc("/launch-app/{app}", LaunchApp)
 
 	log.Fatal(http.ListenAndServe(":10001", myRouter))
-}
-
-func setupIOSDevice() {
-
-}
-
-func setupAndroidDevice() {
-
 }
 
 func main() {
 	setLogging()
 	handleRequests()
-	if os.Getenv("WDA_BUNDLEID") != "" {
-		setupIOSDevice()
-	} else {
-		setupAndroidDevice()
-	}
 }

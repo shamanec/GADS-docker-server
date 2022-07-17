@@ -102,11 +102,11 @@ func StopWDA() {
 }
 
 func InstallWDA() error {
-	err := installApp("WebDriverAgent.ipa")
+	err := InstallApp("WebDriverAgent.ipa")
 	return err
 }
 
-func installApp(fileName string) error {
+func InstallApp(fileName string) error {
 	filePath := "/opt/" + fileName
 
 	device, err := ios.GetDevice(udid)
@@ -114,7 +114,7 @@ func installApp(fileName string) error {
 		log.WithFields(log.Fields{
 			"event": "install_app",
 		}).Error("Could not get device when installing app. Error: " + err.Error())
-		return errors.New("Failed installing application")
+		return errors.New("Failed installing application:" + err.Error())
 	}
 
 	conn, err := zipconduit.New(device)
@@ -122,7 +122,7 @@ func installApp(fileName string) error {
 		log.WithFields(log.Fields{
 			"event": "install_app",
 		}).Error("Could not create zipconduit when installing app. Error: " + err.Error())
-		return errors.New("Failed installing application")
+		return errors.New("Failed installing application:" + err.Error())
 	}
 
 	err = conn.SendFile(filePath)
@@ -130,12 +130,8 @@ func installApp(fileName string) error {
 		log.WithFields(log.Fields{
 			"event": "install_app",
 		}).Error("Could not install app. Error: " + err.Error())
-		return errors.New("Failed installing application")
+		return errors.New("Failed installing application:" + err.Error())
 	}
-
-	// log.WithFields(log.Fields{
-	// 	"event": "install_app",
-	// }).Info("Could not install app. Error: " + err.Error())
 	return nil
 }
 
@@ -168,7 +164,7 @@ func MountDiskImages() error {
 	}
 }
 
-func uninstallAppInternal(bundle_id string) error {
+func UninstallApp(bundle_id string) error {
 	device, err := ios.GetDevice(udid)
 	if err != nil {
 		log.WithFields(log.Fields{

@@ -63,3 +63,21 @@ func LaunchApp(packageName string) error {
 
 	return nil
 }
+
+func InstallApp(apkName string) error {
+	commandString := "adb -s " + udid + " install /opt/" + apkName
+	cmd := exec.Command("bash", "-c", commandString)
+
+	var out bytes.Buffer
+	cmd.Stdout = &out
+
+	err := cmd.Run()
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "",
+		}).Error("Could not install app: " + apkName + ". Error: " + err.Error())
+		return errors.New("Could not install app: " + apkName + " ")
+	}
+
+	return nil
+}

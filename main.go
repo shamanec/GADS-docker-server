@@ -25,11 +25,11 @@ func setLogging() {
 }
 
 func handleRequests() {
-	os.Setenv("DEVICE_OS", DeviceOS)
 	// Create a new instance of the mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/installed-apps", GetInstalledApps)
 	myRouter.HandleFunc("/launch-app/{app}", LaunchApp)
+	myRouter.HandleFunc("/install-app/{app}", InstallApp)
 
 	log.Fatal(http.ListenAndServe(":10001", myRouter))
 }

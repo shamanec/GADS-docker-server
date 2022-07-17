@@ -58,3 +58,25 @@ func LaunchApp(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, "App '"+app+"' is started.")
 }
+
+func InstallApp(w http.ResponseWriter, r *http.Request) {
+	// Get the request path vars
+	vars := mux.Vars(r)
+	appName := vars["app"]
+
+	if DeviceOS == "ios" {
+		err := ios_server.InstallApp(appName)
+		if err != nil {
+			fmt.Fprintf(w, err.Error())
+			return
+		}
+		fmt.Fprintf(w, "App '"+appName+"' installed.")
+	} else {
+		err := android_server.InstallApp(appName)
+		if err != nil {
+			fmt.Fprintf(w, err.Error())
+			return
+		}
+		fmt.Fprintf(w, "App '"+appName+"' installed.")
+	}
+}

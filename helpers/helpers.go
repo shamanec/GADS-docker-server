@@ -58,7 +58,7 @@ func ConvertToJSONString(data interface{}) string {
 		fmt.Println(err)
 		return ""
 	}
-	return string(b)
+	return PrettifyJSON(string(b))
 }
 
 // Unmarshal provided JSON string into a struct

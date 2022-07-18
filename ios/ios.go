@@ -5,13 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"strconv"
 
 	"github.com/danielpaulus/go-ios/ios"
+	"github.com/danielpaulus/go-ios/ios/forward"
 	"github.com/danielpaulus/go-ios/ios/imagemounter"
 	"github.com/danielpaulus/go-ios/ios/installationproxy"
 	"github.com/danielpaulus/go-ios/ios/instruments"
 	"github.com/danielpaulus/go-ios/ios/testmanagerd"
 	"github.com/danielpaulus/go-ios/ios/zipconduit"
+	"github.com/shamanec/GADS-docker-server/config"
 	"github.com/shamanec/GADS-docker-server/helpers"
 	log "github.com/sirupsen/logrus"
 )
@@ -26,7 +29,7 @@ import (
 // var device_os_version = os.Getenv("DEVICE_OS_VERSION")
 // var device_name = os.Getenv("DEVICE_NAME")
 
-var udid = "00008030000418C136FB802E"
+var udid = "ccec159ba0219c9fa0d0fc3d85451ab0dcfebd16"
 var bundleid = "com.shamanec.WebDriverAgentRunner.xctrunner"
 var testrunnerbundleid = bundleid
 var xctestconfig = "WebDriverAgentRunner.xctest"
@@ -35,6 +38,10 @@ var wda_mjpeg_port = "20104"
 var appium_port = "4723"
 var device_os_version = "15.4"
 var device_name = "Device_name"
+
+func GetDeviceInfo() {
+
+}
 
 func StartAppiumIOS() {
 
@@ -68,29 +75,31 @@ func StartAppiumIOS() {
 	}).Info("test")
 }
 
-func StartWDA() {
+// func StartWDA(w http.ResponseWriter, r *http.Request) {
 
-	device, err := ios.GetDevice(udid)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"event": "run_wda",
-		}).Error("Could not get device when installing app. Error: " + err.Error())
-	}
+// 	device, err := ios.GetDevice(udid)
+// 	if err != nil {
+// 		log.WithFields(log.Fields{
+// 			"event": "run_wda",
+// 		}).Error("Could not get device when installing app. Error: " + err.Error())
+// 	}
 
-	go func() {
-		err := testmanagerd.RunXCUIWithBundleIds(bundleid,
-			testrunnerbundleid,
-			xctestconfig,
-			device,
-			[]string{},
-			[]string{"USE_PORT=" + wda_port, "MJPEG_SERVER_PORT=" + wda_mjpeg_port})
+// 	go func() {
+// 		err := testmanagerd.RunXCUIWithBundleIds(bundleid,
+// 			testrunnerbundleid,
+// 			xctestconfig,
+// 			device,
+// 			[]string{},
+// 			[]string{"USE_PORT=" + wda_port, "MJPEG_SERVER_PORT=" + wda_mjpeg_port})
 
-		log.WithFields(log.Fields{
-			"event": "run_wda",
-		}).Error("Failed running wda. Error: " + err.Error())
-		fmt.Println(err.Error())
-	}()
-}
+// 		log.WithFields(log.Fields{
+// 			"event": "run_wda",
+// 		}).Error("Failed running wda. Error: " + err.Error())
+// 		fmt.Println(err.Error())
+// 	}()
+
+// 	fmt.Fprintf(w, "Started WDA on port: "+wda_port)
+// }
 
 func StopWDA() {
 	err := testmanagerd.CloseXCUITestRunner()
@@ -267,4 +276,47 @@ func LaunchApp(bundleID string) (uint64, error) {
 	}
 
 	return pid, nil
+}
+
+func ForwardWDA() error {
+	device, err := ios.GetDevice(udid)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_launch_app",
+		}).Error("Could not get device with UDID: '" + udid + "'. Error: " + err.Error())
+		return errors.New("Error")
+	}
+
+	wda_port, err := strconv.ParseUint(config.WdaPort, 10, 32)
+	if err != nil {
+		return err
+	}
+
+	// wda_mjpeg_port, err := strconv.ParseUint(config.WdaMjpegPort, 10, 32)
+	// if err != nil {
+	// 	return err
+	// }
+
+	forward.Forward(device, uint16(wda_port), uint16(wda_port))
+
+	return nil
+}
+
+func ForwardWDAStream() error {
+	device, err := ios.GetDevice(udid)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "ios_launch_app",
+		}).Error("Could not get device with UDID: '" + udid + "'. Error: " + err.Error())
+		return errors.New("Error")
+	}
+
+	wda_mjpeg_port, err := strconv.ParseUint(config.WdaMjpegPort, 10, 32)
+	if err != nil {
+		return err
+	}
+
+	forward.Forward(device, uint16(wda_mjpeg_port), uint16(wda_mjpeg_port))
+
+	return nil
 }

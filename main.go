@@ -13,13 +13,9 @@ import (
 
 var server_log_file *os.File
 
-//var udid = os.Getenv("DEVICE_UDID")
-var udid = "ccec159ba0219c9fa0d0fc3d85451ab0dcfebd16"
-var DeviceOS = "ios"
-
 func setLogging() {
 	log.SetFormatter(&log.JSONFormatter{})
-	server_log_file, err := os.OpenFile("/home/shamanec/logs/project.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	server_log_file, err := os.OpenFile(config.HomeDir+"/container-server.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
 		panic(err)
 	}
@@ -35,13 +31,18 @@ func handleRequests() {
 	myRouter.HandleFunc("/start-wda", ios_server.StartWDA)
 	myRouter.HandleFunc("/device-info", GetDeviceInfo)
 
-	log.Fatal(http.ListenAndServe(":10001", myRouter))
+	log.Fatal(http.ListenAndServe(":"+config.ContainerServerPort, myRouter))
 }
 
 func main() {
 	config.SetHomeDir()
-	ios_server.ForwardWDA()
-	ios_server.ForwardWDAStream()
+	config.GetEnv()
+
+	if config.DeviceOS == "ios" {
+		ios_server.ForwardWDA()
+		ios_server.ForwardWDAStream()
+	}
+
 	setLogging()
 	handleRequests()
 }

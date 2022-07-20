@@ -8,6 +8,7 @@ import (
 	"github.com/danielpaulus/go-ios/ios"
 	"github.com/danielpaulus/go-ios/ios/testmanagerd"
 	"github.com/shamanec/GADS-docker-server/config"
+	"github.com/shamanec/GADS-docker-server/helpers"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -22,20 +23,29 @@ func setLogging() {
 
 func StartWDA(w http.ResponseWriter, r *http.Request) {
 	setLogging()
-	device, err := ios.GetDevice(udid)
+	err := StartWDAInternal()
+	if err != nil {
+		helpers.JSONError(w, "", err.Error(), 500)
+	}
+	fmt.Fprintf(w, "Attempting to start WDA on port: "+config.WdaPort)
+}
+
+func StartWDAInternal() error {
+	device, err := ios.GetDevice(config.UDID)
 	if err != nil {
 		log.WithFields(log.Fields{
 			"event": "run_wda",
 		}).Error("Could not get device when installing app. Error: " + err.Error())
+		return err
 	}
 
 	go func() {
-		err := testmanagerd.RunXCUIWithBundleIdsCtx(nil, bundleid,
-			testrunnerbundleid,
-			xctestconfig,
+		err := testmanagerd.RunXCUIWithBundleIdsCtx(nil, config.BundleID,
+			config.TestRunnerBundleID,
+			config.XCTestConfig,
 			device,
 			[]string{},
-			[]string{"USE_PORT=" + wda_port, "MJPEG_SERVER_PORT=" + wda_mjpeg_port})
+			[]string{"USE_PORT=" + config.WdaPort, "MJPEG_SERVER_PORT=" + config.WdaMjpegPort})
 
 		log.WithFields(log.Fields{
 			"event": "run_wda",
@@ -43,5 +53,5 @@ func StartWDA(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err.Error())
 	}()
 
-	fmt.Fprintf(w, "Attempting to start WDA on port: "+wda_port)
+	return nil
 }

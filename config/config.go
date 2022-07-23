@@ -37,7 +37,7 @@ var HomeDir string
 // var StreamPort = "1000"
 // var DeviceOS = "ios"
 
-var UDID, BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, AppiumPort, DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost string
+var UDID, BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, AppiumPort, DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost, DeviceModel, StreamSize string
 
 func SetHomeDir() {
 	HomeDir, _ = os.UserHomeDir()
@@ -69,4 +69,6 @@ func GetEnv() {
 	DeviceOS = os.Getenv("DEVICE_OS")
 	ContainerServerPort = os.Getenv("CONTAINER_SERVER_PORT")
 	DevicesHost = os.Getenv("DEVICES_HOST")
+	DeviceModel = os.Getenv("DEVICE_MODEL")
+	StreamSize = os.Getenv("STREAM_SIZE")
 }

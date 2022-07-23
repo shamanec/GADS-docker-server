@@ -20,14 +20,17 @@ type IOSDevice struct {
 }
 
 type IOSDeviceConfig struct {
-	AppiumPort       string `json:"appium_port"`
-	DeviceName       string `json:"device_name"`
-	DeviceOSVersion  string `json:"device_os_version"`
-	DeviceUDID       string `json:"device_udid"`
-	WdaMjpegPort     string `json:"wda_mjpeg_port"`
-	WdaPort          string `json:"wda_port"`
-	DeviceScreenSize string `json:"screen_size"`
-	DeviceHost       string `json:"device_host"`
+	AppiumPort          string `json:"appium_port"`
+	DeviceName          string `json:"device_name"`
+	DeviceOSVersion     string `json:"device_os_version"`
+	DeviceUDID          string `json:"device_udid"`
+	WdaMjpegPort        string `json:"wda_mjpeg_port"`
+	WdaPort             string `json:"wda_port"`
+	DeviceScreenSize    string `json:"screen_size"`
+	DeviceHost          string `json:"device_host"`
+	DeviceModel         string `json:"device_model"`
+	ContainerServerPort string `json:"container_server_port"`
+	DeviceOS            string `json:"device_os"`
 }
 
 func GetDeviceInfo() (string, error) {
@@ -37,14 +40,17 @@ func GetDeviceInfo() (string, error) {
 	}
 
 	config := IOSDeviceConfig{
-		AppiumPort:       config.AppiumPort,
-		DeviceName:       config.DeviceName,
-		DeviceUDID:       config.UDID,
-		DeviceOSVersion:  config.DeviceOSVersion,
-		WdaMjpegPort:     config.WdaMjpegPort,
-		WdaPort:          config.WdaPort,
-		DeviceScreenSize: config.ScreenSize,
-		DeviceHost:       config.DevicesHost,
+		AppiumPort:          config.AppiumPort,
+		DeviceName:          config.DeviceName,
+		DeviceUDID:          config.UDID,
+		DeviceOSVersion:     config.DeviceOSVersion,
+		WdaMjpegPort:        config.WdaMjpegPort,
+		WdaPort:             config.WdaPort,
+		DeviceScreenSize:    config.ScreenSize,
+		DeviceHost:          config.DevicesHost,
+		DeviceModel:         config.DeviceModel,
+		ContainerServerPort: config.ContainerServerPort,
+		DeviceOS:            config.DeviceOS,
 	}
 
 	deviceInfo := IOSDevice{

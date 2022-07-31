@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"os"
 
+	android_server "github.com/shamanec/GADS-docker-server/android"
 	"github.com/shamanec/GADS-docker-server/config"
 	ios_server "github.com/shamanec/GADS-docker-server/ios"
 	log "github.com/sirupsen/logrus"
@@ -30,6 +31,10 @@ func handleRequests() {
 	myRouter.HandleFunc("/install-app/{app}", InstallApp)
 	myRouter.HandleFunc("/start-wda", ios_server.StartWDA)
 	myRouter.HandleFunc("/device-info", GetDeviceInfo)
+
+	if config.DeviceOS == "android" && config.RemoteControl == "true" {
+		myRouter.Handle("/stream", android_server.MinicapStreamHandler())
+	}
 
 	log.Fatal(http.ListenAndServe(":"+config.ContainerServerPort, myRouter))
 }

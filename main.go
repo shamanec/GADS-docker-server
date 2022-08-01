@@ -23,6 +23,13 @@ func setLogging() {
 	log.SetOutput(server_log_file)
 }
 
+func originHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		h.ServeHTTP(w, r)
+	})
+}
+
 func handleRequests() {
 	// Create a new instance of the mux router
 	myRouter := mux.NewRouter().StrictSlash(true)
@@ -36,7 +43,7 @@ func handleRequests() {
 		myRouter.Handle("/stream", android_server.MinicapStreamHandler())
 	}
 
-	log.Fatal(http.ListenAndServe(":"+config.ContainerServerPort, myRouter))
+	log.Fatal(http.ListenAndServe(":"+config.ContainerServerPort, originHandler(myRouter)))
 }
 
 func main() {

@@ -4,6 +4,9 @@ import (
 	"net/http"
 	"os"
 
+	android_server "github.com/shamanec/GADS-docker-server/android"
+	"github.com/shamanec/GADS-docker-server/config"
+	ios_server "github.com/shamanec/GADS-docker-server/ios"
 	log "github.com/sirupsen/logrus"
 
 	"github.com/gorilla/mux"
@@ -11,17 +14,20 @@ import (
 
 var server_log_file *os.File
 
-//var udid = os.Getenv("DEVICE_UDID")
-var udid = "00008030000418C136FB802E"
-var DeviceOS = "android"
-
 func setLogging() {
 	log.SetFormatter(&log.JSONFormatter{})
-	server_log_file, err := os.OpenFile("/home/shamanec/logs/project.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
+	server_log_file, err := os.OpenFile(config.HomeDir+"/container-server.log", os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0777)
 	if err != nil {
 		panic(err)
 	}
 	log.SetOutput(server_log_file)
+}
+
+func originHandler(h http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Access-Control-Allow-Origin", "*")
+		h.ServeHTTP(w, r)
+	})
 }
 
 func handleRequests() {
@@ -30,11 +36,25 @@ func handleRequests() {
 	myRouter.HandleFunc("/installed-apps", GetInstalledApps)
 	myRouter.HandleFunc("/launch-app/{app}", LaunchApp)
 	myRouter.HandleFunc("/install-app/{app}", InstallApp)
+	myRouter.HandleFunc("/start-wda", ios_server.StartWDA)
+	myRouter.HandleFunc("/device-info", GetDeviceInfo)
 
-	log.Fatal(http.ListenAndServe(":10001", myRouter))
+	if config.DeviceOS == "android" && config.RemoteControl == "true" {
+		myRouter.Handle("/stream", android_server.MinicapStreamHandler())
+	}
+
+	log.Fatal(http.ListenAndServe(":"+config.ContainerServerPort, originHandler(myRouter)))
 }
 
 func main() {
+	config.SetHomeDir()
+	config.GetEnv()
+
+	if config.DeviceOS == "ios" {
+		ios_server.ForwardWDA()
+		ios_server.ForwardWDAStream()
+	}
+
 	setLogging()
 	handleRequests()
 }

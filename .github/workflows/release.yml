@@ -7,8 +7,6 @@ jobs:
   build_and_release:
     runs-on: ubuntu-latest
     permissions:
-      issues: write
-      pull-requests: write
       contents: write
     steps:
       - name: Install Go

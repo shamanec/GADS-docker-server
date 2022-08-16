@@ -50,10 +50,10 @@ func main() {
 	config.SetHomeDir()
 	config.GetEnv()
 
-	if config.DeviceOS == "ios" {
-		ios_server.ForwardWDA()
-		ios_server.ForwardWDAStream()
-	}
+	// if config.DeviceOS == "ios" {
+	// 	ios_server.ForwardWDA()
+	// 	ios_server.ForwardWDAStream()
+	// }
 
 	setLogging()
 	handleRequests()

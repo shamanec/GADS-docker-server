@@ -4,7 +4,7 @@ import "os"
 
 var HomeDir string
 
-var UDID, BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, AppiumPort, DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost, DeviceModel, StreamSize, RemoteControl string
+var UDID, BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, AppiumPort, DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost, DeviceModel, StreamSize, RemoteControl, SupervisionPassword string
 
 func SetHomeDir() {
 	HomeDir, _ = os.UserHomeDir()
@@ -29,4 +29,5 @@ func GetEnv() {
 	DeviceModel = os.Getenv("DEVICE_MODEL")
 	StreamSize = os.Getenv("STREAM_SIZE")
 	RemoteControl = os.Getenv("REMOTE_CONTROL")
+	SupervisionPassword = os.Getenv("SUPERVISION_PASSWORD")
 }

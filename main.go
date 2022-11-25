@@ -36,7 +36,6 @@ func handleRequests() {
 	myRouter.HandleFunc("/installed-apps", GetInstalledApps)
 	myRouter.HandleFunc("/launch-app/{app}", LaunchApp)
 	myRouter.HandleFunc("/install-app/{app}", InstallApp)
-	myRouter.HandleFunc("/start-wda", ios_server.StartWDA)
 	myRouter.HandleFunc("/device-info", GetDeviceInfo)
 
 	if config.DeviceOS == "android" && config.RemoteControl == "true" {
@@ -50,10 +49,9 @@ func main() {
 	config.SetHomeDir()
 	config.GetEnv()
 
-	// if config.DeviceOS == "ios" {
-	// 	ios_server.ForwardWDA()
-	// 	ios_server.ForwardWDAStream()
-	// }
+	if config.DeviceOS == "ios" {
+		go ios_server.SetupDevice()
+	}
 
 	setLogging()
 	handleRequests()

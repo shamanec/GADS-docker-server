@@ -2,10 +2,11 @@ package ios_server
 
 import (
 	"errors"
-	"strconv"
+	"fmt"
+	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/danielpaulus/go-ios/ios"
-	"github.com/danielpaulus/go-ios/ios/forward"
 	"github.com/danielpaulus/go-ios/ios/installationproxy"
 	"github.com/danielpaulus/go-ios/ios/instruments"
 	"github.com/danielpaulus/go-ios/ios/zipconduit"
@@ -13,6 +14,119 @@ import (
 	"github.com/shamanec/GADS-docker-server/helpers"
 	log "github.com/sirupsen/logrus"
 )
+
+var device ios.DeviceEntry
+
+func SetupDevice() {
+	// Start usbmuxd and wait 5 seconds to become available
+	go startUsbmuxd()
+
+	var device ios.DeviceEntry
+	err := retry.Do(
+		func() error {
+			availableDevice, err := ios.GetDevice(config.UDID)
+			if err != nil {
+				return err
+			}
+			device = availableDevice
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(3*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Pair the supervised device
+	err = retry.Do(
+		func() error {
+			err := pairDevice(device)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Mount developer disk images
+	err = retry.Do(
+		func() error {
+			err := mountDeveloperImage(device)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Install WebDriverAgent and start it
+	err = retry.Do(
+		func() error {
+			err := prepareWDA(device)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	time.Sleep(15 * time.Second)
+
+	// Forward WebDriverAgent to host container
+	err = retry.Do(
+		func() error {
+			err := forwardPort(device, 8100, 8100)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Forward WebDriverAgent mjpeg stream to host container
+	err = retry.Do(
+		func() error {
+			err := forwardPort(device, 9100, 9100)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	err = updateWDA()
+	if err != nil {
+		fmt.Println("Could not update WebDriverAgent stream settings, err: " + err.Error())
+	}
+
+	//go startAppium()
+}
 
 type IOSDevice struct {
 	InstalledApps []string        `json:"installed_apps"`
@@ -59,6 +173,27 @@ func GetDeviceInfo() (string, error) {
 	}
 
 	return helpers.ConvertToJSONString(deviceInfo), nil
+}
+
+func InstallAppWithDevice(device ios.DeviceEntry, fileName string) error {
+	filePath := "/opt/" + fileName
+
+	conn, err := zipconduit.New(device)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "install_app",
+		}).Error("Could not create zipconduit when installing app. Error: " + err.Error())
+		return errors.New("Failed installing application:" + err.Error())
+	}
+
+	err = conn.SendFile(filePath)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "install_app",
+		}).Error("Could not install app. Error: " + err.Error())
+		return errors.New("Failed installing application:" + err.Error())
+	}
+	return nil
 }
 
 func InstallApp(fileName string) error {
@@ -193,42 +328,4 @@ func LaunchApp(bundleID string) (uint64, error) {
 	}
 
 	return pid, nil
-}
-
-func ForwardWDA() error {
-	device, err := ios.GetDevice(config.UDID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"event": "ios_launch_app",
-		}).Error("Could not get device with UDID: '" + config.UDID + "'. Error: " + err.Error())
-		return errors.New("Error")
-	}
-
-	wda_port, err := strconv.ParseUint(config.WdaPort, 10, 32)
-	if err != nil {
-		return err
-	}
-
-	forward.Forward(device, uint16(wda_port), uint16(wda_port))
-
-	return nil
-}
-
-func ForwardWDAStream() error {
-	device, err := ios.GetDevice(config.UDID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"event": "ios_launch_app",
-		}).Error("Could not get device with UDID: '" + config.UDID + "'. Error: " + err.Error())
-		return errors.New("Error")
-	}
-
-	wda_mjpeg_port, err := strconv.ParseUint(config.WdaMjpegPort, 10, 32)
-	if err != nil {
-		return err
-	}
-
-	forward.Forward(device, uint16(wda_mjpeg_port), uint16(wda_mjpeg_port))
-
-	return nil
 }

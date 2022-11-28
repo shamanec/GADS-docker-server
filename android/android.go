@@ -7,21 +7,12 @@ import (
 	"os/exec"
 	"strings"
 
+	"github.com/shamanec/GADS-docker-server/config"
 	log "github.com/sirupsen/logrus"
 )
 
-var udid = "WCR7N18B14002300"
-
-func startAppiumAndroid() {
-
-}
-
-func startMinicap() {
-
-}
-
 func GetInstalledApps() ([]string, error) {
-	commandString := "adb -s " + udid + " shell cmd package list packages -3"
+	commandString := "adb -s " + config.UDID + " shell cmd package list packages -3"
 	cmd := exec.Command("bash", "-c", commandString)
 
 	var out bytes.Buffer
@@ -47,7 +38,7 @@ func GetInstalledApps() ([]string, error) {
 }
 
 func LaunchApp(packageName string) error {
-	commandString := "adb -s " + udid + " shell monkey -p " + packageName + " 1"
+	commandString := "adb -s " + config.UDID + " shell monkey -p " + packageName + " 1"
 	cmd := exec.Command("bash", "-c", commandString)
 
 	var out bytes.Buffer
@@ -65,7 +56,7 @@ func LaunchApp(packageName string) error {
 }
 
 func InstallApp(apkName string) error {
-	commandString := "adb -s " + udid + " install /opt/" + apkName
+	commandString := "adb -s " + config.UDID + " install /opt/" + apkName
 	cmd := exec.Command("bash", "-c", commandString)
 
 	var out bytes.Buffer

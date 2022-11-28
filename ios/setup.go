@@ -9,7 +9,9 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
+	"github.com/avast/retry-go"
 	"github.com/danielpaulus/go-ios/ios"
 	"github.com/danielpaulus/go-ios/ios/forward"
 	"github.com/danielpaulus/go-ios/ios/imagemounter"
@@ -17,6 +19,103 @@ import (
 	"github.com/shamanec/GADS-docker-server/config"
 	log "github.com/sirupsen/logrus"
 )
+
+func SetupDevice() {
+	go startUsbmuxd()
+
+	config.GetDevice()
+
+	// Pair the supervised device
+	err := retry.Do(
+		func() error {
+			err := pairDevice()
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Mount developer disk images
+	err = retry.Do(
+		func() error {
+			err := mountDeveloperImage()
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Install WebDriverAgent and start it
+	err = retry.Do(
+		func() error {
+			err := prepareWDA()
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// NEED TO HANDLE THIS WITHOUT A SLEEP IN SOME WAY
+	time.Sleep(15 * time.Second)
+
+	// Forward WebDriverAgent to host container
+	err = retry.Do(
+		func() error {
+			err := forwardPort(8100, 8100)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	// Forward WebDriverAgent mjpeg stream to host container
+	err = retry.Do(
+		func() error {
+			err := forwardPort(9100, 9100)
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
+
+	err = updateWDA()
+	if err != nil {
+		fmt.Println("Could not update WebDriverAgent stream settings, err: " + err.Error())
+	}
+
+	// Start Appium server
+	go startAppium()
+}
 
 // Start usbmuxd service after starting the container
 func startUsbmuxd() {
@@ -31,14 +130,13 @@ func startUsbmuxd() {
 	// Run the command to start usbmuxd
 	err := cmd.Run()
 	if err != nil {
-		fmt.Println(err.Error())
 		panic(err)
 	}
 }
 
-// Mount the developer disk images downloading them automatically
-func mountDeveloperImage(device ios.DeviceEntry) error {
-	err := imagemounter.FixDevImage(device, "/opt/DeveloperDiskImages")
+// Mount the developer disk images downloading them automatically in /opt/DeveloperDiskImages
+func mountDeveloperImage() error {
+	err := imagemounter.FixDevImage(config.Device, "/opt/DeveloperDiskImages")
 	if err != nil {
 		return err
 	}
@@ -47,13 +145,13 @@ func mountDeveloperImage(device ios.DeviceEntry) error {
 }
 
 // Pair the device which is expected to be supervised
-func pairDevice(device ios.DeviceEntry) error {
+func pairDevice() error {
 	p12, err := os.ReadFile("/opt/supervision.p12")
 	if err != nil {
 		return err
 	}
 
-	err = ios.PairSupervised(device, p12, config.SupervisionPassword)
+	err = ios.PairSupervised(config.Device, p12, config.SupervisionPassword)
 	if err != nil {
 		return err
 	}
@@ -61,15 +159,47 @@ func pairDevice(device ios.DeviceEntry) error {
 	return nil
 }
 
+type appiumCapabilities struct {
+	UDID                  string `json:"appium:udid"`
+	WdaMjpegPort          string `json:"appium:mjpegServerPort"`
+	ClearSystemFiles      string `json:"appium:clearSystemFiles"`
+	WdaURL                string `json:"appium:webDriverAgentUrl"`
+	PreventWdaAttachments string `json:"appium:preventWDAAttachments"`
+	SimpleIsVisibleCheck  string `json:"appium:simpleIsVisibleCheck"`
+	WdaLocalPort          string `json:"appium:wdaLocalPort"`
+	PlatformVersion       string `json:"appium:platformVersion"`
+	AutomationName        string `json:"appium:automationName"`
+	PlatformName          string `json:"platformName"`
+	DeviceName            string `json:"appium:deviceName"`
+	WdaLaunchTimeout      string `json:"appium:wdaLaunchTimeout"`
+	WdaConnectionTimeout  string `json:"appium:wdaConnectionTimeout"`
+}
+
 // Start the Appium server for the device
 func startAppium() {
-	prg := "appium"
-	arg1 := "-p 4723"
-	arg2 := "--log-timestamp"
-	arg3 := "--allow-cors"
-	arg4 := "--session-override"
-	arg5 := `--default-capabilities '{"appium:udid": "'` + config.UDID + `'", "appium:mjpegServerPort": "9100", "appium:clearSystemFiles": "false", "appium:webDriverAgentUrl":"http://localhost:8100", "appium:preventWDAAttachments": "true", "appium:simpleIsVisibleCheck": "false", "appium:wdaLocalPort": "8100", "appium:platformVersion": "'` + config.DeviceOSVersion + `'", "appium:automationName":"XCUITest", "platformName": "iOS", "appium:deviceName": "'` + config.DeviceName + `'", "appium:wdaLaunchTimeout": "120000", "appium:wdaConnectionTimeout": "240000"}'`
-	cmd := exec.Command(prg, arg1, arg2, arg3, arg4, arg5)
+	capabilities1 := appiumCapabilities{
+		UDID:                  config.UDID,
+		WdaURL:                "http://localhost:8100",
+		WdaMjpegPort:          "9100",
+		WdaLocalPort:          "8100",
+		WdaLaunchTimeout:      "120000",
+		WdaConnectionTimeout:  "240000",
+		ClearSystemFiles:      "false",
+		PreventWdaAttachments: "true",
+		SimpleIsVisibleCheck:  "false",
+		AutomationName:        "XCUITest",
+		PlatformName:          "iOS",
+		DeviceName:            config.DeviceName,
+	}
+	capabilitiesJson, err := json.Marshal(capabilities1)
+	if err != nil {
+		panic(errors.New("Could not marshal Appium capabilities json, err: " + err.Error()))
+	}
+
+	// We are using /bin/bash -c here because os.exec does not invoke the system shell and `nvm` is not sourced in the container
+	// should find a better solution in the future
+	cmd := exec.Command("/bin/bash", "-c", "appium -p 4723 --log-timestamp --allow-cors --session-override --default-capabilities '"+string(capabilitiesJson)+"'")
+	fmt.Println(cmd)
 
 	outfile, err := os.Create("/opt/logs/appium.log")
 	if err != nil {
@@ -77,6 +207,7 @@ func startAppium() {
 	}
 	defer outfile.Close()
 	cmd.Stdout = outfile
+	cmd.Stderr = outfile
 
 	err = cmd.Run()
 	if err != nil {
@@ -85,21 +216,8 @@ func startAppium() {
 }
 
 // Install WebDriverAgent on the device
-func prepareWDA(device ios.DeviceEntry) error {
-	// fmt.Println("Installing WebDriverAgent")
-	// prg := "ios"
-	// arg1 := "install"
-	// arg2 := "--path=/opt/WebDriverAgent.ipa"
-	// arg3 := "--udid=" + config.UDID
-
-	// cmd := exec.Command(prg, arg1, arg2, arg3)
-
-	// err := cmd.Run()
-	// if err != nil {
-	// 	return err
-	// }
-
-	err := InstallAppWithDevice(device, "WebDriverAgent.ipa")
+func prepareWDA() error {
+	err := InstallAppWithDevice(config.Device, "WebDriverAgent.ipa")
 	if err != nil {
 		return err
 	}
@@ -138,33 +256,29 @@ func startWDA() {
 
 // Start WebDriverAgent directly using go-ios modules
 func StartWDAInternal() error {
-	device, err := ios.GetDevice(config.UDID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"event": "run_wda",
-		}).Error("Could not get device when installing app. Error: " + err.Error())
-		return err
-	}
 
 	go func() {
 		err := testmanagerd.RunXCUIWithBundleIdsCtx(nil, config.BundleID,
 			config.TestRunnerBundleID,
 			config.XCTestConfig,
-			device,
+			config.Device,
 			[]string{},
 			[]string{"USE_PORT=" + config.WdaPort, "MJPEG_SERVER_PORT=" + config.WdaMjpegPort})
 
-		log.WithFields(log.Fields{
-			"event": "run_wda",
-		}).Error("Failed running wda. Error: " + err.Error())
-		fmt.Println(err.Error())
+		if err != nil {
+			log.WithFields(log.Fields{
+				"event": "run_wda",
+			}).Error("Failed running wda. Error: " + err.Error())
+			panic(err)
+		}
 	}()
 
 	return nil
 }
 
-func forwardPort(device ios.DeviceEntry, hostPort uint16, devicePort uint16) error {
-	err := forward.Forward(device, hostPort, devicePort)
+// Forward a port from device to container using go-ios
+func forwardPort(hostPort uint16, devicePort uint16) error {
+	err := forward.Forward(config.Device, hostPort, devicePort)
 	if err != nil {
 		return err
 	}
@@ -172,6 +286,7 @@ func forwardPort(device ios.DeviceEntry, hostPort uint16, devicePort uint16) err
 	return nil
 }
 
+// Create a new WebDriverAgent session and update stream settings
 func updateWDA() error {
 	fmt.Println("Updating WDA session")
 	sessionID, err := createWDASession()
@@ -187,6 +302,7 @@ func updateWDA() error {
 	return nil
 }
 
+// Update WebDriverAgent stream settings
 func updateWdaStreamSettings(sessionID string) error {
 	requestString := `{"settings": {"mjpegServerFramerate": 30, "mjpegServerScreenshotQuality": 50, "mjpegScalingFactor": 100}}`
 
@@ -202,6 +318,7 @@ func updateWdaStreamSettings(sessionID string) error {
 	return nil
 }
 
+// Create a new WebDriverAgent session
 func createWDASession() (string, error) {
 	requestString := `{
 		"capabilities": {

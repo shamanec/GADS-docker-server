@@ -7,11 +7,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"strings"
 	"time"
 
 	"github.com/avast/retry-go"
+	"github.com/codeskyblue/go-sh"
 	"github.com/danielpaulus/go-ios/ios"
 	"github.com/danielpaulus/go-ios/ios/forward"
 	"github.com/danielpaulus/go-ios/ios/imagemounter"
@@ -25,10 +25,13 @@ func SetupDevice() {
 
 	go startUsbmuxd()
 
-	config.GetDevice()
+	err := config.GetDevice()
+	if err != nil {
+		panic(errors.New("Could not get device with go-ios, err:" + err.Error()))
+	}
 
 	// Pair the supervised device
-	err := retry.Do(
+	err = retry.Do(
 		func() error {
 			err := pairDevice()
 			if err != nil {
@@ -121,16 +124,7 @@ func SetupDevice() {
 
 // Start usbmuxd service after starting the container
 func startUsbmuxd() {
-	prg := "usbmuxd"
-	arg1 := "-U"
-	arg2 := "usbmux"
-	arg3 := "-f"
-
-	// Build the usbmuxd command
-	cmd := exec.Command(prg, arg1, arg2, arg3)
-
-	// Run the command to start usbmuxd
-	err := cmd.Run()
+	err := sh.Command("usbmuxd", "-U", "usbmux", "-f").Run()
 	if err != nil {
 		panic(err)
 	}
@@ -198,20 +192,32 @@ func startAppium() {
 		panic(errors.New("Could not marshal Appium capabilities json, err: " + err.Error()))
 	}
 
-	// We are using /bin/bash -c here because os.exec does not invoke the system shell and `nvm` is not sourced in the container
-	// should find a better solution in the future
-	cmd := exec.Command("/bin/bash", "-c", "appium -p 4723 --log-timestamp --allow-cors --session-override --default-capabilities '"+string(capabilitiesJson)+"'")
-	fmt.Println(cmd)
+	// Create a json file for the capabilities
+	capabilitiesFile, err := os.Create("/opt/capabilities.json")
+	if err != nil {
+		panic(err)
+	}
 
+	// Wrute the json byte slice to the json file created above
+	_, err = capabilitiesFile.Write(capabilitiesJson)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create file for the Appium logs
 	outfile, err := os.Create("/opt/logs/appium.log")
 	if err != nil {
 		panic(err)
 	}
 	defer outfile.Close()
-	cmd.Stdout = outfile
-	cmd.Stderr = outfile
 
-	err = cmd.Run()
+	// Create new shell session and redirect Stdout and Stderr to the Appium logs file
+	session := sh.NewSession()
+	session.Stdout = outfile
+	session.Stderr = outfile
+
+	// Start the Appium server with default cli arguments and using default capabilities from the file created above
+	err = session.Command("appium", "-p", "4723", "--log-timestamp", "--allow-cors", "--default-capabilities", "/opt/capabilities.json").Run()
 	if err != nil {
 		panic(err)
 	}
@@ -230,15 +236,7 @@ func prepareWDA() error {
 
 // Start the WebDriverAgent on the device
 func startWDA() {
-	fmt.Println("Starting WDA")
-	prg := "ios"
-	arg1 := "runwda"
-	arg2 := "--bundleid=" + config.BundleID
-	arg3 := "--testrunnerbundleid=" + config.BundleID
-	arg4 := "--xctestconfig=WebDriverAgentRunner.xctest"
-	arg5 := "--udid=" + config.UDID
-
-	cmd := exec.Command(prg, arg1, arg2, arg3, arg4, arg5)
+	fmt.Println("INFO: Starting WebDriverAgent")
 
 	outfile, err := os.Create("/opt/logs/wda.log")
 	if err != nil {
@@ -246,12 +244,12 @@ func startWDA() {
 	}
 	defer outfile.Close()
 
-	cmd.Stdout = outfile
-	cmd.Stderr = outfile
+	session := sh.NewSession()
+	session.Stdout = outfile
+	session.Stderr = outfile
 
-	err = cmd.Run()
+	err = session.Command("ios", "runwda", "--bundleid="+config.BundleID, "--testrunnerbundleid="+config.BundleID, "--xctestconfig=WebDriverAgentRunner.xctest", "--udid="+config.UDID).Run()
 	if err != nil {
-		fmt.Println(err.Error())
 		panic(err)
 	}
 }

@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +22,7 @@ type appiumCapabilities struct {
 }
 
 func SetupDevice() {
-	fmt.Println("Device setup")
+	fmt.Println("INFO: Device setup")
 
 	// Check if device is available to adb
 	err := retry.Do(
@@ -69,6 +68,7 @@ func SetupDevice() {
 	go startAppium()
 }
 
+// Check if the Android device is available to adb
 func checkDeviceAvailable() error {
 	fmt.Println("INFO: Checking if device is available to adb")
 
@@ -85,6 +85,7 @@ func checkDeviceAvailable() error {
 	return errors.New("Device with UDID=" + config.UDID + " was not available to adb")
 }
 
+// Forward minicap socket to the host container
 func forwardMinicap() error {
 	fmt.Println("INFO: Forwarding minicap connection to tcp:1313")
 
@@ -96,40 +97,58 @@ func forwardMinicap() error {
 	return nil
 }
 
+// Starts the Appium server on the device
 func startAppium() {
 	fmt.Println("INFO: Starting Appium server")
-	capabilities1 := appiumCapabilities{
+
+	// Create the Appium capabilities
+	capabilities := appiumCapabilities{
 		UDID:           config.UDID,
 		AutomationName: "UiAutomator2",
 		PlatformName:   "Android",
 		DeviceName:     config.DeviceName,
 	}
-	capabilitiesJson, err := json.Marshal(capabilities1)
+	// Marshal the capabilities into a json
+	capabilitiesJson, err := json.Marshal(capabilities)
 	if err != nil {
 		panic(errors.New("Could not marshal Appium capabilities json, err: " + err.Error()))
 	}
 
-	// We are using /bin/bash -c here because os.exec does not invoke the system shell and `nvm` is not sourced in the container
-	// should find a better solution in the future
-	cmd := exec.Command("/bin/bash", "-c", "appium -p 4723 --log-timestamp --allow-cors --session-override --allow-insecure chromedriver_autodownload --default-capabilities '"+string(capabilitiesJson)+"'")
-	fmt.Println(cmd)
+	// Create a json file for the capabilities
+	capabilitiesFile, err := os.Create("/opt/capabilities.json")
+	if err != nil {
+		panic(err)
+	}
 
+	// Wrute the json byte slice to the json file created above
+	_, err = capabilitiesFile.Write(capabilitiesJson)
+	if err != nil {
+		panic(err)
+	}
+
+	// Create file for the Appium logs
 	outfile, err := os.Create("/opt/logs/appium.log")
 	if err != nil {
 		panic(err)
 	}
 	defer outfile.Close()
-	cmd.Stdout = outfile
-	cmd.Stderr = outfile
 
-	err = cmd.Run()
+	// Create new shell session and redirect Stdout and Stderr to the Appium logs file
+	session := sh.NewSession()
+	session.Stdout = outfile
+	session.Stderr = outfile
+
+	// Start the Appium server with default cli arguments and using default capabilities from the file created above
+	err = session.Command("appium", "-p", "4723", "--log-timestamp", "--allow-cors", "--allow-insecure", "chromedriver_autodownload", "--default-capabilities", "/opt/capabilities.json").Run()
 	if err != nil {
 		panic(err)
 	}
 }
 
+// Starts minicap service on the device
 func startMinicap() {
 	fmt.Println("INFO: Starting minicap")
+
 	if config.RemoteControl == "true" {
 		session := sh.NewSession()
 		session.SetDir("/root/minicap")

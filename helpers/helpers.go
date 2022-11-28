@@ -72,3 +72,53 @@ func UnmarshalJSONString(jsonString string, v interface{}) error {
 
 	return nil
 }
+
+// I've added the below structs in case we need to connect to Selenium Grid
+// Needs to be handled though
+
+type SeleniumGridJSON struct {
+	GridCapabilities  []GridCapabilities `json:"capabilities"`
+	GridConfiguration GridConfiguration  `json:"configuration"`
+}
+
+// BrowserName - device name or actual browser for the OS
+// version - device OS version
+// MaxInstances 1
+// platform - Android or iOS
+// deviceType phone
+// platformName - Android or iOS
+// platformVersion - device OS version
+type GridCapabilities struct {
+	BrowserName     string `json:"browserName"`
+	Version         string `json:"version"`
+	MaxInstances    string `json:"maxInstances"`
+	Platform        string `json:"platform"`
+	DeviceName      string `json:"deviceName"`
+	DeviceType      string `json:"deviceType"`
+	PlatformName    string `json:"platformName"`
+	PlatformVersion string `json:"platformVersion"`
+	UDID            string `json:"udid"`
+}
+
+// URL = http:// + devices host : + appium port /wd/hub
+// timeout 180
+// maxSession 1
+// register true
+/// registerCycle 5000
+// automationName - UiAutomator2 for Android, XCUITest for iOS
+// downPollingLimit 10
+// hub protocol - http or https
+type GridConfiguration struct {
+	URL              string `json:"url"`
+	AppiumPort       string `json:"port"`
+	DeviceHost       string `json:"host"`
+	GridPort         string `json:"hubPort"`
+	GridHost         string `json:"hubHost"`
+	Timeout          string `json:"timeout"`
+	MaxSession       string `json:"maxSession"`
+	Register         string `json:"register"`
+	RegisterCycle    string `json:"registerCycle"`
+	AutomationName   string `json:"automationName"`
+	DownpollingLimit string `json:"downPollingLimit"`
+	GridProtocol     string `json:"hubProtocol"`
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -23,6 +24,7 @@ type appiumCapabilities struct {
 
 func SetupDevice() {
 	fmt.Println("Device setup")
+
 	// Check if device is available to adb
 	err := retry.Do(
 		func() error {
@@ -41,35 +43,41 @@ func SetupDevice() {
 
 	// Start minicap and wait for it to be up 5 seconds
 	go startMinicap()
-	time.Sleep(10 * time.Second)
+	time.Sleep(5 * time.Second)
 
-	// Try to forward minicap to host container
-	// err = retry.Do(
-	// 	func() error {
-	// 		err := forwardMinicap()
-	// 		if err != nil {
-	// 			return err
-	// 		}
-	// 		return nil
-	// 	},
-	// 	retry.Attempts(3),
-	// 	retry.Delay(3*time.Second),
-	// )
-	// if err != nil {
-	// 	panic(err)
-	// }
+	//Try to forward minicap to host container
+	err = retry.Do(
+		func() error {
+			err := forwardMinicap()
+			if err != nil {
+				fmt.Println("This is error from forward minicap")
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(3*time.Second),
+	)
+	if err != nil {
+		panic(err)
+	}
 
-	go forwardMinicap()
+	// Start getting minicap stream after service was started and forwarded to host container
+	go GetTCPStream(conn, imageChan)
 
+	// Start the Appium server
 	go startAppium()
 }
 
 func checkDeviceAvailable() error {
-	output, err := exec.Command("adb", "devices").Output()
+	fmt.Println("INFO: Checking if device is available to adb")
+
+	output, err := sh.Command("adb", "devices").Output()
 	if err != nil {
 		return errors.New("Could not execute `adb devices`, err: " + err.Error())
 	}
 
+	// Check if we got the device UDID in the list of `adb devices`
 	if strings.Contains(string(output), config.UDID) {
 		return nil
 	}
@@ -78,18 +86,9 @@ func checkDeviceAvailable() error {
 }
 
 func forwardMinicap() error {
-	// fmt.Println("Forwarding minicap")
-	// cmd := exec.Command("adb", "forward", "tcp:1313", "localabstract:minicap")
+	fmt.Println("INFO: Forwarding minicap connection to tcp:1313")
 
-	// err := cmd.Run()
-	// if err != nil {
-	// 	return errors.New("Could not forward minicap socket, err: " + err.Error())
-	// }
-
-	// return nil
-
-	session := sh.NewSession()
-	err := session.Command("adb forward tcp:1313 localabstract:minicap").Run()
+	err := sh.Command("adb", "forward", "tcp:1313", "localabstract:minicap").Run()
 	if err != nil {
 		return err
 	}
@@ -98,7 +97,7 @@ func forwardMinicap() error {
 }
 
 func startAppium() {
-	fmt.Println("Starting appium")
+	fmt.Println("INFO: Starting Appium server")
 	capabilities1 := appiumCapabilities{
 		UDID:           config.UDID,
 		AutomationName: "UiAutomator2",
@@ -129,12 +128,25 @@ func startAppium() {
 	}
 }
 
-// cd /root/minicap/ && ./run.sh -P ${SCREEN_SIZE}@${STREAM_WIDTH}x${STREAM_HEIGHT}/0 >>/opt/logs/minicap.log 2>&1 &
 func startMinicap() {
-	fmt.Println("Starting minicap")
+	fmt.Println("INFO: Starting minicap")
 	if config.RemoteControl == "true" {
 		session := sh.NewSession()
 		session.SetDir("/root/minicap")
+
+		if config.MinicapHalfResolution == "true" {
+			height, err := strconv.Atoi(config.AndroidScreenHeight)
+			width, err := strconv.Atoi(config.AndroidScreenWidth)
+			if err != nil {
+				panic(err)
+			}
+
+			config.AndroidScreenHeight = strconv.Itoa(height / 2)
+			config.AndroidScreenWidth = strconv.Itoa(width / 2)
+		}
+
+		// Discard Stdout so we don't constantly write to the container-server.log (if needed)
+		//session.Stdout = io.Discard
 
 		err := session.Command("./run.sh", "-P", config.ScreenSize+"@"+config.AndroidScreenWidth+"x"+config.AndroidScreenHeight+"/0").Start()
 		if err != nil {

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"net/http"
 	"os"
 
@@ -47,18 +46,14 @@ func handleRequests() {
 }
 
 func main() {
-	fmt.Println("Is something wrong with config?")
 	config.SetHomeDir()
 	config.GetEnv()
 
-	fmt.Println("WHADDUP")
 	if config.DeviceOS == "ios" {
-		fmt.Println("WTF")
 		go ios_server.SetupDevice()
 	}
 
 	if config.DeviceOS == "android" {
-		fmt.Println("Device setup")
 		go android_server.SetupDevice()
 	}
 

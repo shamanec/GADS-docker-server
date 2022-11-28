@@ -21,6 +21,7 @@ func GetTCPStream(conn net.Conn, imageChan chan image.Image) {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	idxReDialCnt := 0
 	for {
 		conn, err := net.DialTCP("tcp", nil, tcpAddr)
@@ -119,8 +120,6 @@ func MinicapStreamHandler() *StreamHandler {
 		},
 		Options: &jpeg.EncoderOptions{Quality: 50, OptimizeCoding: true},
 	}
-
-	go GetTCPStream(conn, imageChan)
 
 	return &stream
 }

@@ -21,6 +21,8 @@ import (
 )
 
 func SetupDevice() {
+	fmt.Println("Device setup")
+
 	go startUsbmuxd()
 
 	config.GetDevice()

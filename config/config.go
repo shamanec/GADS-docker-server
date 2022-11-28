@@ -12,7 +12,7 @@ var HomeDir string
 
 var UDID, BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, AppiumPort string
 var DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost, DeviceModel, StreamSize, RemoteControl, SupervisionPassword string
-var AndroidScreenWidth, AndroidScreenHeight string
+var AndroidScreenWidth, AndroidScreenHeight, MinicapHalfResolution string
 
 func SetHomeDir() {
 	HomeDir, _ = os.UserHomeDir()
@@ -39,6 +39,7 @@ func GetEnv() {
 	SupervisionPassword = os.Getenv("SUPERVISION_PASSWORD")
 	AndroidScreenWidth = os.Getenv("SCREEN_WIDTH")
 	AndroidScreenHeight = os.Getenv("SCREEN_HEIGHT")
+	MinicapHalfResolution = os.Getenv("MINICAP_HALF_RESOLUTION")
 }
 
 var Device ios.DeviceEntry

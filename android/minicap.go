@@ -33,10 +33,6 @@ func GetTCPStream(conn net.Conn, imageChan chan image.Image) {
 				break
 			}
 		}
-		var pid, rw, rh, vw, vh uint32
-		var version uint8
-		var unused uint8
-		var orientation uint8
 		binRead := func(data interface{}) error {
 			if err != nil {
 				return err
@@ -44,6 +40,12 @@ func GetTCPStream(conn net.Conn, imageChan chan image.Image) {
 			err = binary.Read(conn, binary.LittleEndian, data)
 			return err
 		}
+
+		var pid, rw, rh, vw, vh uint32
+		var version uint8
+		var unused uint8
+		var orientation uint8
+
 		binRead(&version)
 		binRead(&unused)
 		binRead(&pid)

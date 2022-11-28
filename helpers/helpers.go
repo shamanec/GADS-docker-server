@@ -1,7 +1,6 @@
 package helpers
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -44,21 +43,14 @@ func SimpleJSONResponse(w http.ResponseWriter, response_message string, code int
 	json.NewEncoder(w).Encode(message)
 }
 
-// Prettify JSON with indentation and stuff
-func PrettifyJSON(data string) string {
-	var prettyJSON bytes.Buffer
-	json.Indent(&prettyJSON, []byte(data), "", "  ")
-	return prettyJSON.String()
-}
-
 // Convert interface into JSON string
 func ConvertToJSONString(data interface{}) string {
-	b, err := json.Marshal(data)
+	b, err := json.MarshalIndent(data, "", "")
 	if err != nil {
 		fmt.Println(err)
 		return ""
 	}
-	return PrettifyJSON(string(b))
+	return string(b)
 }
 
 // Unmarshal provided JSON string into a struct

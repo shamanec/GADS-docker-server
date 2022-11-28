@@ -10,21 +10,23 @@ import (
 
 var HomeDir string
 
-var UDID, BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, AppiumPort string
-var DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost, DeviceModel, StreamSize, RemoteControl, SupervisionPassword string
-var AndroidScreenWidth, AndroidScreenHeight, MinicapHalfResolution string
+// Generic vars
+var UDID, AppiumPort, DeviceOSVersion, DeviceName, ScreenSize, StreamPort, DeviceOS, ContainerServerPort, DevicesHost, DeviceModel string
+
+// iOS vars
+var BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, SupervisionPassword string
+var Device ios.DeviceEntry
+
+// Android vars
+var AndroidScreenWidth, AndroidScreenHeight, MinicapHalfResolution, StreamSize, RemoteControl string
 
 func SetHomeDir() {
 	HomeDir, _ = os.UserHomeDir()
 }
 
 func GetEnv() {
+	// Generic vars
 	UDID = os.Getenv("DEVICE_UDID")
-	BundleID = os.Getenv("WDA_BUNDLEID")
-	TestRunnerBundleID = BundleID
-	XCTestConfig = "WebDriverAgentRunner.xctest"
-	WdaPort = os.Getenv("WDA_PORT")
-	WdaMjpegPort = os.Getenv("MJPEG_PORT")
 	AppiumPort = os.Getenv("APPIUM_PORT")
 	DeviceOSVersion = os.Getenv("DEVICE_OS_VERSION")
 	DeviceName = os.Getenv("DEVICE_NAME")
@@ -34,16 +36,24 @@ func GetEnv() {
 	ContainerServerPort = os.Getenv("CONTAINER_SERVER_PORT")
 	DevicesHost = os.Getenv("DEVICES_HOST")
 	DeviceModel = os.Getenv("DEVICE_MODEL")
+
+	// iOS vars
+	BundleID = os.Getenv("WDA_BUNDLEID")
+	TestRunnerBundleID = BundleID
+	XCTestConfig = "WebDriverAgentRunner.xctest"
+	WdaPort = os.Getenv("WDA_PORT")
+	WdaMjpegPort = os.Getenv("MJPEG_PORT")
+	SupervisionPassword = os.Getenv("SUPERVISION_PASSWORD")
+
+	// Android vars
 	StreamSize = os.Getenv("STREAM_SIZE")
 	RemoteControl = os.Getenv("REMOTE_CONTROL")
-	SupervisionPassword = os.Getenv("SUPERVISION_PASSWORD")
 	AndroidScreenWidth = os.Getenv("SCREEN_WIDTH")
 	AndroidScreenHeight = os.Getenv("SCREEN_HEIGHT")
 	MinicapHalfResolution = os.Getenv("MINICAP_HALF_RESOLUTION")
 }
 
-var Device ios.DeviceEntry
-
+// Get ios.DeviceEntry for go-ios functions on container start
 func GetDevice() error {
 	err := retry.Do(
 		func() error {
@@ -58,7 +68,8 @@ func GetDevice() error {
 		retry.Delay(3*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		return err
 	}
+
 	return nil
 }

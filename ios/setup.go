@@ -25,9 +25,10 @@ func SetupDevice() {
 
 	go startUsbmuxd()
 
+	// Get ios.DeviceEntry after usbmuxd is started
 	err := config.GetDevice()
 	if err != nil {
-		panic(errors.New("Could not get device with go-ios, err:" + err.Error()))
+		panic("Could not get device with go-ios after 3 attempts, err:" + err.Error())
 	}
 
 	// Pair the supervised device
@@ -43,7 +44,7 @@ func SetupDevice() {
 		retry.Delay(2*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		panic("Could not pair supervised device after 3 attempts, err:\n" + err.Error())
 	}
 
 	// Mount developer disk images
@@ -59,13 +60,13 @@ func SetupDevice() {
 		retry.Delay(2*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		panic("Could not mount developer disk images after 3 attempts, err:\n" + err.Error())
 	}
 
 	// Install WebDriverAgent and start it
 	err = retry.Do(
 		func() error {
-			err := prepareWDA()
+			err := installAndStartWebDriverAgent()
 			if err != nil {
 				return err
 			}
@@ -75,10 +76,10 @@ func SetupDevice() {
 		retry.Delay(2*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		panic("Could not prepare WebDriverAgent after 3 attempts, err:\n" + err.Error())
 	}
 
-	// NEED TO HANDLE THIS WITHOUT A SLEEP IN SOME WAY
+	// TODO check how to filter through WebDriverAgent startup output to see when it is up instead of hardcoded sleep
 	time.Sleep(15 * time.Second)
 
 	// Forward WebDriverAgent to host container
@@ -94,7 +95,7 @@ func SetupDevice() {
 		retry.Delay(2*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		panic("Could not forward WebDriverAgent port, err:\n" + err.Error())
 	}
 
 	// Forward WebDriverAgent mjpeg stream to host container
@@ -110,12 +111,25 @@ func SetupDevice() {
 		retry.Delay(2*time.Second),
 	)
 	if err != nil {
-		panic(err)
+		panic("Could not forward WebDriverAgent mjpeg stream port, err:\n" + err.Error())
 	}
 
-	err = updateWDA()
+	// TODO think if we should panic here or just leave it be
+	err = retry.Do(
+		func() error {
+			err := updateWebDriverAgent()
+			if err != nil {
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(2*time.Second),
+	)
 	if err != nil {
-		fmt.Println("Could not update WebDriverAgent stream settings, err: " + err.Error())
+		log.WithFields(log.Fields{
+			"event": "update_webdriveragent",
+		}).Error("Could not update WebDriverAgent stream settings, err:\n" + err.Error())
 	}
 
 	// Start Appium server
@@ -224,20 +238,19 @@ func startAppium() {
 }
 
 // Install WebDriverAgent on the device
-func prepareWDA() error {
+func installAndStartWebDriverAgent() error {
 	err := InstallAppWithDevice(config.Device, "WebDriverAgent.ipa")
 	if err != nil {
 		return err
 	}
 
-	go startWDA()
+	go startWebDriverAgent()
 	return nil
 }
 
 // Start the WebDriverAgent on the device
-func startWDA() {
+func startWebDriverAgent() {
 	fmt.Println("INFO: Starting WebDriverAgent")
-
 	outfile, err := os.Create("/opt/logs/wda.log")
 	if err != nil {
 		panic(err)
@@ -248,6 +261,7 @@ func startWDA() {
 	session.Stdout = outfile
 	session.Stderr = outfile
 
+	// Lazy way to do this using go-ios binary, should some day update to use go-ios modules instead!!!
 	err = session.Command("ios", "runwda", "--bundleid="+config.BundleID, "--testrunnerbundleid="+config.BundleID, "--xctestconfig=WebDriverAgentRunner.xctest", "--udid="+config.UDID).Run()
 	if err != nil {
 		panic(err)
@@ -255,8 +269,8 @@ func startWDA() {
 }
 
 // Start WebDriverAgent directly using go-ios modules
-func StartWDAInternal() error {
-
+// TODO see if this can be reworked to log somewhere else, currently unused
+func startWDAInternal() error {
 	go func() {
 		err := testmanagerd.RunXCUIWithBundleIdsCtx(nil, config.BundleID,
 			config.TestRunnerBundleID,
@@ -278,6 +292,7 @@ func StartWDAInternal() error {
 
 // Forward a port from device to container using go-ios
 func forwardPort(hostPort uint16, devicePort uint16) error {
+	fmt.Printf("INFO: Forwarding port=%v to host port=%v", devicePort, hostPort)
 	err := forward.Forward(config.Device, hostPort, devicePort)
 	if err != nil {
 		return err
@@ -287,14 +302,14 @@ func forwardPort(hostPort uint16, devicePort uint16) error {
 }
 
 // Create a new WebDriverAgent session and update stream settings
-func updateWDA() error {
-	fmt.Println("Updating WDA session")
-	sessionID, err := createWDASession()
+func updateWebDriverAgent() error {
+	fmt.Println("INFO: Updating WebDriverAgent session and mjpeg stream settings")
+	sessionID, err := createWebDriverAgentSession()
 	if err != nil {
 		return err
 	}
 
-	err = updateWdaStreamSettings(sessionID)
+	err = updateWebDriverAgentStreamSettings(sessionID)
 	if err != nil {
 		return err
 	}
@@ -302,10 +317,12 @@ func updateWDA() error {
 	return nil
 }
 
-// Update WebDriverAgent stream settings
-func updateWdaStreamSettings(sessionID string) error {
+func updateWebDriverAgentStreamSettings(sessionID string) error {
+	// Set 30 frames per second, without any scaling, half the original screenshot quality
+	// TODO should make this configurable in some way, although can be easily updated the same way
 	requestString := `{"settings": {"mjpegServerFramerate": 30, "mjpegServerScreenshotQuality": 50, "mjpegScalingFactor": 100}}`
 
+	// Post the mjpeg server settings
 	response, err := http.Post("http://localhost:8100/session/"+sessionID+"/appium/settings", "application/json", strings.NewReader(requestString))
 	if err != nil {
 		return err
@@ -319,7 +336,8 @@ func updateWdaStreamSettings(sessionID string) error {
 }
 
 // Create a new WebDriverAgent session
-func createWDASession() (string, error) {
+func createWebDriverAgentSession() (string, error) {
+	// TODO see if this JSON can be simplified
 	requestString := `{
 		"capabilities": {
 			"firstMatch": [

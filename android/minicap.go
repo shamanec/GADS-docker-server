@@ -41,19 +41,20 @@ func GetTCPStream(conn net.Conn, imageChan chan image.Image) {
 			return err
 		}
 
-		var pid, rw, rh, vw, vh uint32
+		var minicapProcessPID, realDisplayWidth, realDisplayHeight, virtualDisplayWidth, virtualDisplayHeight uint32
 		var version uint8
 		var unused uint8
-		var orientation uint8
+		var displayOrientation uint8
 
+		// Read the initial global header
 		binRead(&version)
 		binRead(&unused)
-		binRead(&pid)
-		binRead(&rw)
-		binRead(&rh)
-		binRead(&vw)
-		binRead(&vh)
-		binRead(&orientation)
+		binRead(&minicapProcessPID)
+		binRead(&realDisplayWidth)
+		binRead(&realDisplayHeight)
+		binRead(&virtualDisplayWidth)
+		binRead(&virtualDisplayHeight)
+		binRead(&displayOrientation)
 		binRead(&unused)
 		if err != nil {
 			continue
@@ -61,20 +62,20 @@ func GetTCPStream(conn net.Conn, imageChan chan image.Image) {
 
 		bufrd := bufio.NewReader(conn) // Do not put it into for loop
 		for {
-			var size uint32
-			if err = binRead(&size); err != nil {
+			var frameSize uint32
+			if err = binRead(&frameSize); err != nil {
 				log.Fatal(err)
 				break
 			}
-			lr := &io.LimitedReader{bufrd, int64(size)}
-			var im image.Image
-			im, err = jpeg.Decode(lr, &jpeg.DecoderOptions{})
+			lr := &io.LimitedReader{bufrd, int64(frameSize)}
+
+			image, err := jpeg.Decode(lr, &jpeg.DecoderOptions{})
 			if err != nil {
 				break
 			}
 
 			select {
-			case imageChan <- im:
+			case imageChan <- image:
 			default:
 			}
 		}

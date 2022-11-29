@@ -83,6 +83,7 @@ func InstallAppWithDevice(device ios.DeviceEntry, fileName string) error {
 	return nil
 }
 
+// Install app on device from /opt folder by file name
 func InstallApp(fileName string) error {
 	filePath := "/opt/" + fileName
 
@@ -112,6 +113,7 @@ func InstallApp(fileName string) error {
 	return nil
 }
 
+// Uninstall app on device by bundle ID
 func UninstallApp(bundle_id string) error {
 	device, err := ios.GetDevice(config.UDID)
 	if err != nil {
@@ -144,6 +146,7 @@ type goIOSAppList []struct {
 	BundleID string `json:"CFBundleIdentifier"`
 }
 
+// Get a list of installed apps on device
 func GetInstalledApps() ([]string, error) {
 	device, err := ios.GetDevice(config.UDID)
 	if err != nil {
@@ -188,7 +191,7 @@ func GetInstalledApps() ([]string, error) {
 	return bundleIDs, nil
 }
 
-// Test
+// Launch app on device by bundle ID
 func LaunchApp(bundleID string) (uint64, error) {
 
 	device, err := ios.GetDevice(config.UDID)

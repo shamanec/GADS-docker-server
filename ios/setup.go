@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -21,7 +22,7 @@ import (
 )
 
 func SetupDevice() {
-	fmt.Println("Device setup")
+	fmt.Println("INFO: Device setup")
 
 	// Start usbmuxd service since it does not start automatically in the container
 	// in a goroutine because its a long-running process
@@ -79,7 +80,7 @@ func SetupDevice() {
 		retry.Delay(2*time.Second),
 	)
 	if err != nil {
-		panic("Could not prepare WebDriverAgent after 3 attempts, err:\n" + err.Error())
+		panic("Could not install WebDriverAgent after 3 attempts, err:\n" + err.Error())
 	}
 
 	// TODO check how to filter through WebDriverAgent startup output to see when it is up instead of hardcoded sleep
@@ -133,7 +134,7 @@ func SetupDevice() {
 	if err != nil {
 		log.WithFields(log.Fields{
 			"event": "update_webdriveragent",
-		}).Error("Could not update WebDriverAgent stream settings, err:\n" + err.Error())
+		}).Error("Could not create WebDriverAgent session or update stream settings, err:" + err.Error())
 	}
 
 	// Start Appium server
@@ -142,9 +143,24 @@ func SetupDevice() {
 
 // Start usbmuxd service after starting the container
 func startUsbmuxd() {
-	err := sh.Command("usbmuxd", "-U", "usbmux", "-f").Run()
+	fmt.Println("INFO: Starting usbmuxd service")
+
+	// Create a new shell session and discard Stdout so we dont spam container-server.log
+	// Should only see Stderr in case something happens
+	session := sh.NewSession()
+	session.Stdout = io.Discard
+
+	// Create a usbmuxd.log file for Stderr
+	usbmuxdLog, err := os.Create("/opt/logs/usbmuxd.log")
 	if err != nil {
-		panic(err)
+		panic("Could not create /opt/logs/usbmuxd.log file, err:" + err.Error())
+	}
+	// Redirect session Stderr to the usbmuxd.log file created above
+	session.Stderr = usbmuxdLog
+
+	err = session.Command("usbmuxd", "-U", "usbmux", "-f").Run()
+	if err != nil {
+		panic("usbmuxd service failed, err:" + err.Error())
 	}
 }
 
@@ -152,12 +168,12 @@ func startUsbmuxd() {
 func pairDevice() error {
 	p12, err := os.ReadFile("/opt/supervision.p12")
 	if err != nil {
-		return err
+		return errors.New("Could not read /opt/supervision.p12 file, err:" + err.Error())
 	}
 
 	err = ios.PairSupervised(config.Device, p12, config.SupervisionPassword)
 	if err != nil {
-		return err
+		return errors.New("Could not pair successfully, err:" + err.Error())
 	}
 
 	return nil
@@ -189,7 +205,7 @@ func startWebDriverAgent() {
 	fmt.Println("INFO: Starting WebDriverAgent")
 	outfile, err := os.Create("/opt/logs/wda.log")
 	if err != nil {
-		panic(err)
+		panic("Could not create /opt/logs/wda.log file, err:" + err.Error())
 	}
 	defer outfile.Close()
 
@@ -200,13 +216,13 @@ func startWebDriverAgent() {
 	// Lazy way to do this using go-ios binary, should some day update to use go-ios modules instead!!!
 	err = session.Command("ios", "runwda", "--bundleid="+config.BundleID, "--testrunnerbundleid="+config.BundleID, "--xctestconfig=WebDriverAgentRunner.xctest", "--udid="+config.UDID).Run()
 	if err != nil {
-		panic("Could not start WebDriverAgent using go-ios binary, err:" + err.Error())
+		panic("Running WebDriverAgent using go-ios binary failed, err:" + err.Error())
 	}
 }
 
 // Forward a port from device to container using go-ios
 func forwardPort(hostPort uint16, devicePort uint16) error {
-	fmt.Printf("INFO: Forwarding port=%v to host port=%v", devicePort, hostPort)
+	fmt.Printf("INFO: Forwarding port=%v to host port=%v \n", devicePort, hostPort)
 	err := forward.Forward(config.Device, hostPort, devicePort)
 	if err != nil {
 		return err
@@ -218,6 +234,7 @@ func forwardPort(hostPort uint16, devicePort uint16) error {
 // Create a new WebDriverAgent session and update stream settings
 func updateWebDriverAgent() error {
 	fmt.Println("INFO: Updating WebDriverAgent session and mjpeg stream settings")
+
 	sessionID, err := createWebDriverAgentSession()
 	if err != nil {
 		return err
@@ -243,7 +260,7 @@ func updateWebDriverAgentStreamSettings(sessionID string) error {
 	}
 
 	if response.StatusCode != 200 {
-		return errors.New("Could not successfully update WDA stream settings")
+		return errors.New("Could not successfully update WDA stream settings, status code=" + strconv.Itoa(response.StatusCode))
 	}
 
 	return nil
@@ -273,19 +290,23 @@ func createWebDriverAgentSession() (string, error) {
 		}
 	}`
 
+	// Post to create new session
 	response, err := http.Post("http://localhost:8100/session", "application/json", strings.NewReader(requestString))
 	if err != nil {
 		return "", err
 	}
 
+	// Get the response into a byte slice
 	responseBody, _ := io.ReadAll(response.Body)
 
+	// Unmarshal response into a basic map
 	var responseJson map[string]interface{}
 	err = json.Unmarshal(responseBody, &responseJson)
 	if err != nil {
 		return "", err
 	}
 
+	// Check the session ID from the map
 	if responseJson["sessionId"] == "" {
 		if err != nil {
 			return "", errors.New("Could not get `sessionId` while creating a new WebDriverAgent session")
@@ -335,6 +356,8 @@ type appiumCapabilities struct {
 
 // Start the Appium server for the device
 func startAppium() {
+	fmt.Println("INFO: Starting Appium server")
+
 	capabilities1 := appiumCapabilities{
 		UDID:                  config.UDID,
 		WdaURL:                "http://localhost:8100",
@@ -351,25 +374,25 @@ func startAppium() {
 	}
 	capabilitiesJson, err := json.Marshal(capabilities1)
 	if err != nil {
-		panic(errors.New("Could not marshal Appium capabilities json, err: " + err.Error()))
+		panic("Could not marshal Appium capabilities json, err: " + err.Error())
 	}
 
 	// Create a json file for the capabilities
 	capabilitiesFile, err := os.Create("/opt/capabilities.json")
 	if err != nil {
-		panic(err)
+		panic("Could not create /opt/capabilities.json file, err:" + err.Error())
 	}
 
 	// Wrute the json byte slice to the json file created above
 	_, err = capabilitiesFile.Write(capabilitiesJson)
 	if err != nil {
-		panic(err)
+		panic("Could not write capabilities to /opt/capabilities.json, err:" + err.Error())
 	}
 
 	// Create file for the Appium logs
 	outfile, err := os.Create("/opt/logs/appium.log")
 	if err != nil {
-		panic(err)
+		panic("Could not create /opt/logs/appium.log file, err:" + err.Error())
 	}
 	defer outfile.Close()
 
@@ -381,6 +404,6 @@ func startAppium() {
 	// Start the Appium server with default cli arguments and using default capabilities from the file created above
 	err = session.Command("appium", "-p", "4723", "--log-timestamp", "--allow-cors", "--default-capabilities", "/opt/capabilities.json").Run()
 	if err != nil {
-		panic(err)
+		panic("Appium server failed, err:" + err.Error())
 	}
 }

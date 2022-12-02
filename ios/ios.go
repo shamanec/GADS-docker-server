@@ -2,10 +2,8 @@ package ios_server
 
 import (
 	"errors"
-	"strconv"
 
 	"github.com/danielpaulus/go-ios/ios"
-	"github.com/danielpaulus/go-ios/ios/forward"
 	"github.com/danielpaulus/go-ios/ios/installationproxy"
 	"github.com/danielpaulus/go-ios/ios/instruments"
 	"github.com/danielpaulus/go-ios/ios/zipconduit"
@@ -13,6 +11,8 @@ import (
 	"github.com/shamanec/GADS-docker-server/helpers"
 	log "github.com/sirupsen/logrus"
 )
+
+var device ios.DeviceEntry
 
 type IOSDevice struct {
 	InstalledApps []string        `json:"installed_apps"`
@@ -33,6 +33,7 @@ type IOSDeviceConfig struct {
 	DeviceOS            string `json:"device_os"`
 }
 
+// Get the information for the device - installed apps, configuration values
 func GetDeviceInfo() (string, error) {
 	bundleIDs, err := GetInstalledApps()
 	if err != nil {
@@ -61,6 +62,28 @@ func GetDeviceInfo() (string, error) {
 	return helpers.ConvertToJSONString(deviceInfo), nil
 }
 
+func InstallAppWithDevice(device ios.DeviceEntry, fileName string) error {
+	filePath := "/opt/" + fileName
+
+	conn, err := zipconduit.New(device)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "install_app",
+		}).Error("Could not create zipconduit when installing app. Error: " + err.Error())
+		return errors.New("Failed installing application:" + err.Error())
+	}
+
+	err = conn.SendFile(filePath)
+	if err != nil {
+		log.WithFields(log.Fields{
+			"event": "install_app",
+		}).Error("Could not install app. Error: " + err.Error())
+		return errors.New("Failed installing application:" + err.Error())
+	}
+	return nil
+}
+
+// Install app on device from /opt folder by file name
 func InstallApp(fileName string) error {
 	filePath := "/opt/" + fileName
 
@@ -90,6 +113,7 @@ func InstallApp(fileName string) error {
 	return nil
 }
 
+// Uninstall app on device by bundle ID
 func UninstallApp(bundle_id string) error {
 	device, err := ios.GetDevice(config.UDID)
 	if err != nil {
@@ -122,6 +146,7 @@ type goIOSAppList []struct {
 	BundleID string `json:"CFBundleIdentifier"`
 }
 
+// Get a list of installed apps on device
 func GetInstalledApps() ([]string, error) {
 	device, err := ios.GetDevice(config.UDID)
 	if err != nil {
@@ -166,6 +191,7 @@ func GetInstalledApps() ([]string, error) {
 	return bundleIDs, nil
 }
 
+// Launch app on device by bundle ID
 func LaunchApp(bundleID string) (uint64, error) {
 
 	device, err := ios.GetDevice(config.UDID)
@@ -193,42 +219,4 @@ func LaunchApp(bundleID string) (uint64, error) {
 	}
 
 	return pid, nil
-}
-
-func ForwardWDA() error {
-	device, err := ios.GetDevice(config.UDID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"event": "ios_launch_app",
-		}).Error("Could not get device with UDID: '" + config.UDID + "'. Error: " + err.Error())
-		return errors.New("Error")
-	}
-
-	wda_port, err := strconv.ParseUint(config.WdaPort, 10, 32)
-	if err != nil {
-		return err
-	}
-
-	forward.Forward(device, uint16(wda_port), uint16(wda_port))
-
-	return nil
-}
-
-func ForwardWDAStream() error {
-	device, err := ios.GetDevice(config.UDID)
-	if err != nil {
-		log.WithFields(log.Fields{
-			"event": "ios_launch_app",
-		}).Error("Could not get device with UDID: '" + config.UDID + "'. Error: " + err.Error())
-		return errors.New("Error")
-	}
-
-	wda_mjpeg_port, err := strconv.ParseUint(config.WdaMjpegPort, 10, 32)
-	if err != nil {
-		return err
-	}
-
-	forward.Forward(device, uint16(wda_mjpeg_port), uint16(wda_mjpeg_port))
-
-	return nil
 }

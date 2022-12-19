@@ -45,7 +45,7 @@ func SetupDevice() {
 			return nil
 		},
 		retry.Attempts(3),
-		retry.Delay(2*time.Second),
+		retry.Delay(5*time.Second),
 	)
 	if err != nil {
 		panic("Could not pair supervised device after 3 attempts, err:\n" + err.Error())
@@ -168,7 +168,12 @@ func startUsbmuxd() {
 func pairDevice() error {
 	p12, err := os.ReadFile("/opt/supervision.p12")
 	if err != nil {
-		return errors.New("Could not read /opt/supervision.p12 file, err:" + err.Error())
+		log.Warning("Could not read /opt/supervision.p12 file, err:" + err.Error())
+		log.Info("Falling back to unsupervised pairing")
+		err = ios.Pair(config.Device)
+		if err != nil {
+			return errors.New("Could not pair successfully, err:" + err.Error())
+		}
 	}
 
 	err = ios.PairSupervised(config.Device, p12, config.SupervisionPassword)

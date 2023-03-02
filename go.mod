@@ -17,6 +17,7 @@ require (
 	github.com/fullsailor/pkcs7 v0.0.0-20190404230743-d7302db945fa // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/uuid v1.1.2 // indirect
+	github.com/gorilla/websocket v1.5.0
 	github.com/konsorten/go-windows-terminal-sequences v1.0.3 // indirect
 	github.com/lunixbochs/struc v0.0.0-20200707160740-784aaebc1d40 // indirect
 	github.com/pixiv/go-libjpeg v0.0.0-20190822045933-3da21a74767d // indirect

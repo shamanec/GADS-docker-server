@@ -25,3 +25,5 @@ require (
 	golang.org/x/sys v0.0.0-20210615035016-665e8c7367d1 // indirect
 	howett.net/plist v0.0.0-20200419221736-3b63eb3a43b5 // indirect
 )
+
+require github.com/pierrec/lz4 v2.6.1+incompatible // indirect

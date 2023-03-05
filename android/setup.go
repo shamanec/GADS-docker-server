@@ -148,6 +148,29 @@ func SetupDevice() {
 		panic(err)
 	}
 
+	// adb shell am instrument -w -e debug false com.shamanec.stream.test/androidx.test.runner.AndroidJUnitRunner
+
+	//Try to forward instrumentation socket to host container
+	// err = retry.Do(
+	// 	func() error {
+	// 		//err := forwardMinicap()
+	// 		err := forwardInstrumentation()
+	// 		if err != nil {
+	// 			fmt.Println("This is error from forward instrumentation")
+	// 			return err
+	// 		}
+	// 		return nil
+	// 	},
+	// 	retry.Attempts(3),
+	// 	retry.Delay(3*time.Second),
+	// )
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// Start the instrumentation test
+	//go startInstrumentation()
+
 	// Start getting gads stream after service was started and forwarded to host container
 	go ConnectWS()
 
@@ -196,7 +219,7 @@ func checkGadsStreamServiceRunning() (bool, error) {
 func installGadsStream() error {
 	fmt.Println("INFO: Installing gads-stream.apk on the device")
 
-	err := sh.Command("adb", "install", "/opt/gads-stream.apk").Run()
+	err := sh.Command("adb", "install", "-r", "/opt/gads-stream.apk").Run()
 	if err != nil {
 		return errors.New("Could not install gads-stream.apk, err: " + err.Error())
 	}
@@ -255,6 +278,28 @@ func forwardGadsStream() error {
 	fmt.Println("INFO: Forwarding gads-stream connection to tcp:1313")
 
 	err := sh.Command("adb", "forward", "tcp:1313", "tcp:1991").Run()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func startInstrumentation() error {
+	fmt.Println("INFO: Starting instrumentation")
+	err := sh.Command("adb", "shell", "am", "instrument", "-w", "-e", "debug", "false", "com.shamanec.stream.test").Start()
+	if err != nil {
+		return errors.New("Could not start instrumentation successfully, err: " + err.Error())
+	}
+
+	return nil
+}
+
+// Forward instrumentation socket to the host container
+func forwardInstrumentation() error {
+	fmt.Println("INFO: Forwarding gads-stream connection to tcp:1313")
+
+	err := sh.Command("adb", "forward", "tcp:1314", "tcp:1992").Run()
 	if err != nil {
 		return err
 	}

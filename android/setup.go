@@ -40,112 +40,23 @@ func SetupDevice() {
 		panic(err)
 	}
 
-	streamAvailable := false
+	if config.UseMinicap == "false" {
+		fmt.Println("INFO: Using GADS-Android-stream for this device")
+		err = UseGadsStream()
+		if err != nil {
+			panic(err)
+		}
 
-	// Check if the gads-stream service is already running on the device
-	// to avoid steps to install, permit and run it
-	err = retry.Do(
-		func() error {
-			isAvailable, err := checkGadsStreamServiceRunning()
-			if err != nil {
-				return err
-			}
-			streamAvailable = isAvailable
-			return nil
-		},
-		retry.Attempts(3),
-		retry.Delay(3*time.Second),
-	)
-	if err != nil {
-		panic(err)
+		// Start getting gads stream after service was started and forwarded to host container
+		go ConnectGadsStreamWS()
 	}
 
-	if !streamAvailable {
-		// Installing gads-stream.apk
-		err = retry.Do(
-			func() error {
-				err := installGadsStream()
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-			retry.Attempts(3),
-			retry.Delay(3*time.Second),
-		)
-		if err != nil {
-			panic(err)
-		}
+	if config.UseMinicap == "true" || config.UseMinicap == "" {
+		fmt.Println("INFO: Using minicap for this device")
+		err = UseMinicapStream()
 
-		// Add recording permissions to gads-stream app
-		err = retry.Do(
-			func() error {
-				err := addGadsStreamRecordingPermissions()
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-			retry.Attempts(3),
-			retry.Delay(3*time.Second),
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		// Start the gads-stream app
-		err = retry.Do(
-			func() error {
-				err := startGadsStreamApp()
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-			retry.Attempts(3),
-			retry.Delay(3*time.Second),
-		)
-		if err != nil {
-			panic(err)
-		}
-
-		// Press the Home button to hide the gads-stream app activity
-		err = retry.Do(
-			func() error {
-				err := pressHomeButton()
-				if err != nil {
-					return err
-				}
-				return nil
-			},
-			retry.Attempts(3),
-			retry.Delay(3*time.Second),
-		)
-		if err != nil {
-			panic(err)
-		}
-	}
-
-	// Start minicap and wait for it to be up 5 seconds
-	//go startMinicap()
-	time.Sleep(5 * time.Second)
-
-	//Try to forward gads-stream to host container
-	err = retry.Do(
-		func() error {
-			//err := forwardMinicap()
-			err := forwardGadsStream()
-			if err != nil {
-				fmt.Println("This is error from forward minicap")
-				return err
-			}
-			return nil
-		},
-		retry.Attempts(3),
-		retry.Delay(3*time.Second),
-	)
-	if err != nil {
-		panic(err)
+		// Start getting minicap stream after service was started and forwarded to host container
+		go ConnectMinicapStreamWS(conn, imageChan)
 	}
 
 	// adb shell am instrument -w -e debug false com.shamanec.stream.test/androidx.test.runner.AndroidJUnitRunner
@@ -171,14 +82,142 @@ func SetupDevice() {
 	// Start the instrumentation test
 	//go startInstrumentation()
 
-	// Start getting gads stream after service was started and forwarded to host container
-	go ConnectWS()
-
-	// Keeping this to allow minicap usage as well
-	//go GetTCPStream(conn, imageChan)
-
 	// Start the Appium server
 	go startAppium()
+}
+
+func UseMinicapStream() error {
+	go startMinicap()
+
+	time.Sleep(5 * time.Second)
+
+	//Try to forward minicap stream to host container
+	err := retry.Do(
+		func() error {
+			err := forwardMinicap()
+			if err != nil {
+				fmt.Println("This is error from forward minicap")
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(3*time.Second),
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func UseGadsStream() error {
+	streamAvailable := false
+
+	// Check if the gads-stream service is already running on the device
+	// to avoid steps to install, permit and run it
+	err := retry.Do(
+		func() error {
+			isAvailable, err := checkGadsStreamServiceRunning()
+			if err != nil {
+				return err
+			}
+			streamAvailable = isAvailable
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(3*time.Second),
+	)
+	if err != nil {
+		return err
+	}
+
+	if !streamAvailable {
+		// Installing gads-stream.apk
+		err = retry.Do(
+			func() error {
+				err := installGadsStream()
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			retry.Attempts(3),
+			retry.Delay(3*time.Second),
+		)
+		if err != nil {
+			return err
+		}
+
+		// Add recording permissions to gads-stream app
+		err = retry.Do(
+			func() error {
+				err := addGadsStreamRecordingPermissions()
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			retry.Attempts(3),
+			retry.Delay(3*time.Second),
+		)
+		if err != nil {
+			return err
+		}
+
+		// Start the gads-stream app
+		err = retry.Do(
+			func() error {
+				err := startGadsStreamApp()
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			retry.Attempts(3),
+			retry.Delay(3*time.Second),
+		)
+		if err != nil {
+			return err
+		}
+
+		// Press the Home button to hide the gads-stream app activity
+		err = retry.Do(
+			func() error {
+				err := pressHomeButton()
+				if err != nil {
+					return err
+				}
+				return nil
+			},
+			retry.Attempts(3),
+			retry.Delay(3*time.Second),
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	time.Sleep(5 * time.Second)
+
+	//Try to forward gads-stream to host container
+	err = retry.Do(
+		func() error {
+			err := forwardGadsStream()
+			if err != nil {
+				fmt.Println("This is error from forward minicap")
+				return err
+			}
+			return nil
+		},
+		retry.Attempts(3),
+		retry.Delay(3*time.Second),
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Check if the Android device is available to adb

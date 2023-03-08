@@ -16,7 +16,7 @@ var streamImageChan = make(chan image.Image, 1)
 var lastImageArray []byte
 var dummyImage image.Image
 
-func ConnectWS() {
+func ConnectGadsStreamWS() {
 	u := url.URL{Scheme: "ws", Host: "localhost:1313", Path: ""}
 	fmt.Printf("connecting to %s", u.String())
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)

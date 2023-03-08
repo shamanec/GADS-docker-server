@@ -18,7 +18,7 @@ var BundleID, TestRunnerBundleID, XCTestConfig, WdaPort, WdaMjpegPort, Supervisi
 var Device ios.DeviceEntry
 
 // Android vars
-var AndroidScreenWidth, AndroidScreenHeight, MinicapHalfResolution, StreamSize, RemoteControl string
+var AndroidScreenWidth, AndroidScreenHeight, MinicapHalfResolution, StreamSize, RemoteControl, UseMinicap string
 
 func SetHomeDir() {
 	HomeDir, _ = os.UserHomeDir()
@@ -51,6 +51,7 @@ func GetEnv() {
 	AndroidScreenWidth = os.Getenv("SCREEN_WIDTH")
 	AndroidScreenHeight = os.Getenv("SCREEN_HEIGHT")
 	MinicapHalfResolution = os.Getenv("MINICAP_HALF_RESOLUTION")
+	UseMinicap = os.Getenv("USE_MINICAP")
 }
 
 // Get ios.DeviceEntry for go-ios functions on container start

@@ -16,7 +16,7 @@ var imageChan = make(chan image.Image, 1)
 var conn net.Conn
 
 // Get images from TCP stream and add them to imageChan
-func GetTCPStream(conn net.Conn, imageChan chan image.Image) {
+func ConnectMinicapStreamWS(conn net.Conn, imageChan chan image.Image) {
 	tcpAddr, err := net.ResolveTCPAddr("tcp", "localhost:1313")
 	if err != nil {
 		log.Fatal(err)

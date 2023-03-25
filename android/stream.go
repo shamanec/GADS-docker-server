@@ -2,7 +2,6 @@ package android_server
 
 import (
 	"fmt"
-	"image"
 	"io"
 	"net/http"
 	"net/url"
@@ -11,10 +10,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-var streamImageChan = make(chan image.Image, 1)
-
-var lastImageArray []byte
-var dummyImage image.Image
+var streamBytesChan = make(chan []byte, 1)
 
 func ConnectGadsStreamWS() {
 	u := url.URL{Scheme: "ws", Host: "localhost:1313", Path: ""}
@@ -33,10 +29,8 @@ func ConnectGadsStreamWS() {
 			break
 		}
 
-		lastImageArray = message
-
 		select {
-		case streamImageChan <- dummyImage:
+		case streamBytesChan <- message:
 		default:
 		}
 	}
@@ -44,7 +38,7 @@ func ConnectGadsStreamWS() {
 }
 
 type GadsStreamHandler struct {
-	Next func() (image.Image, error)
+	Next func() ([]byte, error)
 }
 
 func (h GadsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -52,7 +46,7 @@ func (h GadsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	boundary := "\r\n--frame\r\nContent-Type: image/jpeg\r\n\r\n"
 	for {
 		// get handler new image from imageChan
-		_, err := h.Next()
+		imageBytes, err := h.Next()
 		if err != nil {
 			return
 		}
@@ -62,7 +56,7 @@ func (h GadsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		n, err = io.WriteString(w, string(lastImageArray))
+		n, err = io.WriteString(w, string(imageBytes))
 		if err != nil {
 			return
 		}
@@ -77,8 +71,8 @@ func (h GadsStreamHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 func JpegStreamHandler() *GadsStreamHandler {
 	// for each new image in imageChan update the handler
 	stream := GadsStreamHandler{
-		Next: func() (image.Image, error) {
-			return <-streamImageChan, nil
+		Next: func() ([]byte, error) {
+			return <-streamBytesChan, nil
 		},
 	}
 

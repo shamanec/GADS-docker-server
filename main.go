@@ -37,16 +37,7 @@ func handleRequests() {
 	myRouter.HandleFunc("/launch-app/{app}", LaunchApp)
 	myRouter.HandleFunc("/install-app/{app}", InstallApp)
 	myRouter.HandleFunc("/device-info", GetDeviceInfo)
-
-	if config.DeviceOS == "android" && config.RemoteControl == "true" {
-		if config.UseMinicap == "false" {
-			myRouter.Handle("/stream", android_server.JpegStreamHandler())
-		}
-
-		if config.UseMinicap == "" || config.UseMinicap == "true" {
-			myRouter.Handle("/stream", android_server.MinicapStreamHandler())
-		}
-	}
+	myRouter.Handle("/stream", android_server.JpegStreamHandler())
 
 	log.Fatal(http.ListenAndServe(":"+config.ContainerServerPort, originHandler(myRouter)))
 }

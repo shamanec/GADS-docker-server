@@ -39,6 +39,11 @@ func SetupDevice() {
 		panic(err)
 	}
 
+	err = UseGadsStream()
+	if err != nil {
+		panic(err)
+	}
+
 	// Start getting gads stream after service was started and forwarded to host container
 	go ConnectGadsStreamWS()
 

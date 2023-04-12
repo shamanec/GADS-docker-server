@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -40,31 +39,14 @@ func SetupDevice() {
 		panic(err)
 	}
 
-	if config.UseMinicap == "false" {
-		fmt.Println("INFO: Using GADS-Android-stream for this device")
-		err = UseGadsStream()
-		if err != nil {
-			panic(err)
-		}
-
-		// Start getting gads stream after service was started and forwarded to host container
-		go ConnectGadsStreamWS()
-	}
-
-	if config.UseMinicap == "true" || config.UseMinicap == "" {
-		fmt.Println("INFO: Using minicap for this device")
-		err = UseMinicapStream()
-
-		// Start getting minicap stream after service was started and forwarded to host container
-		go ConnectMinicapStreamWS(conn, imageChan)
-	}
+	// Start getting gads stream after service was started and forwarded to host container
+	go ConnectGadsStreamWS()
 
 	// adb shell am instrument -w -e debug false com.shamanec.stream.test/androidx.test.runner.AndroidJUnitRunner
 
 	//Try to forward instrumentation socket to host container
 	// err = retry.Do(
 	// 	func() error {
-	// 		//err := forwardMinicap()
 	// 		err := forwardInstrumentation()
 	// 		if err != nil {
 	// 			fmt.Println("This is error from forward instrumentation")
@@ -84,31 +66,6 @@ func SetupDevice() {
 
 	// Start the Appium server
 	go startAppium()
-}
-
-func UseMinicapStream() error {
-	go startMinicap()
-
-	time.Sleep(5 * time.Second)
-
-	//Try to forward minicap stream to host container
-	err := retry.Do(
-		func() error {
-			err := forwardMinicap()
-			if err != nil {
-				fmt.Println("This is error from forward minicap")
-				return err
-			}
-			return nil
-		},
-		retry.Attempts(3),
-		retry.Delay(3*time.Second),
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func UseGadsStream() error {
@@ -205,7 +162,7 @@ func UseGadsStream() error {
 		func() error {
 			err := forwardGadsStream()
 			if err != nil {
-				fmt.Println("This is error from forward minicap")
+				fmt.Println("This is error from forwarding gads-stream")
 				return err
 			}
 			return nil
@@ -299,19 +256,6 @@ func pressHomeButton() error {
 	return nil
 }
 
-// Keeping this to allow minicap usage as well
-// Forward minicap socket to the host container
-func forwardMinicap() error {
-	fmt.Println("INFO: Forwarding minicap connection to tcp:1313")
-
-	err := sh.Command("adb", "forward", "tcp:1313", "localabstract:minicap").Run()
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 // Forward gads-stream socket to the host container
 func forwardGadsStream() error {
 	fmt.Println("INFO: Forwarding gads-stream connection to tcp:1313")
@@ -391,40 +335,5 @@ func startAppium() {
 	err = session.Command("appium", "-p", "4723", "--log-timestamp", "--allow-cors", "--allow-insecure", "chromedriver_autodownload", "--default-capabilities", "/opt/capabilities.json").Run()
 	if err != nil {
 		panic(err)
-	}
-}
-
-// Keeping this to allow minicap usage as well
-// Starts minicap service on the device
-func startMinicap() {
-	fmt.Println("INFO: Starting minicap")
-
-	if config.RemoteControl == "true" {
-		session := sh.NewSession()
-		session.SetDir("/root/minicap")
-
-		if config.MinicapHalfResolution == "true" {
-			height, err := strconv.Atoi(config.AndroidScreenHeight)
-			width, err := strconv.Atoi(config.AndroidScreenWidth)
-			if err != nil {
-				panic(err)
-			}
-
-			config.AndroidScreenHeight = strconv.Itoa(height / 2)
-			config.AndroidScreenWidth = strconv.Itoa(width / 2)
-		}
-
-		// Discard Stdout so we don't constantly write to the container-server.log (if needed)
-		//session.Stdout = io.Discard
-
-		err := session.Command("./run.sh", "-P", config.ScreenSize+"@"+config.AndroidScreenWidth+"x"+config.AndroidScreenHeight+"/0").Start()
-		if err != nil {
-			panic(err)
-		}
-
-		err = session.Wait()
-		if err != nil {
-			panic(err)
-		}
 	}
 }

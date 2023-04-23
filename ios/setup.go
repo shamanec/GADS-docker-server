@@ -174,6 +174,7 @@ func pairDevice() error {
 		if err != nil {
 			return errors.New("Could not pair successfully, err:" + err.Error())
 		}
+		return nil
 	}
 
 	err = ios.PairSupervised(config.Device, p12, config.SupervisionPassword)
